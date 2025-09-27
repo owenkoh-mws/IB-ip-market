@@ -213,6 +213,30 @@
           company: getInputValue(companyEl),
           phone: getInputValue(phoneEl),
         });
+        // Ensure profile is saved immediately
+        try {
+          const session = await window.IBAuthService.getSession();
+          const userId = session && session.user && session.user.id;
+          if (userId) {
+            await window.IBAuthService.upsertProfile({
+              id: userId,
+              email: getInputValue(emailEl).toLowerCase(),
+              name: getInputValue(nameEl),
+              company: getInputValue(companyEl),
+              phone: getInputValue(phoneEl),
+            });
+          }
+        } catch (profileErr) {
+          console.warn('[IBAuthUI] profile upsert after signup failed', profileErr);
+        }
+        // Optional debug output
+        try {
+          const debugEl = document.querySelector('[data-auth="signup-profile-debug"]');
+          if (debugEl) {
+            const profile = await window.IBAuthService.getProfile();
+            debugEl.textContent = profile ? JSON.stringify(profile) : 'no profile';
+          }
+        } catch (_) {}
         setText(successEl, '가입이 완료되었어요. 이메일을 확인해 주세요.');
         show(successEl);
       } catch (err) {
