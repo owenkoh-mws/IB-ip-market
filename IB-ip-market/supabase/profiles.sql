@@ -31,9 +31,18 @@ for each row execute function public.set_updated_at();
 -- Insert a skeleton profile when a new user signs up
 create or replace function public.handle_new_user()
 returns trigger as $$
+declare
+  meta jsonb;
 begin
-  insert into public.profiles (id, email)
-  values (new.id, new.email)
+  meta := new.raw_user_meta_data;
+  insert into public.profiles (id, email, name, company, phone)
+  values (
+    new.id,
+    new.email,
+    coalesce(meta->>'name', null),
+    coalesce(meta->>'company', null),
+    coalesce(meta->>'phone', null)
+  )
   on conflict (id) do nothing;
   return new;
 end;
@@ -43,6 +52,28 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
 after insert on auth.users
 for each row execute function public.handle_new_user();
+
+-- Keep profiles in sync when user metadata is updated later (e.g., after email confirmation)
+create or replace function public.handle_user_metadata_updated()
+returns trigger as $$
+declare
+  meta jsonb;
+begin
+  meta := new.raw_user_meta_data;
+  update public.profiles p set
+    email = new.email,
+    name = coalesce(meta->>'name', p.name),
+    company = coalesce(meta->>'company', p.company),
+    phone = coalesce(meta->>'phone', p.phone)
+  where p.id = new.id;
+  return new;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists on_auth_user_updated on auth.users;
+create trigger on_auth_user_updated
+after update on auth.users
+for each row execute function public.handle_user_metadata_updated();
 
 -- Row Level Security
 alter table public.profiles enable row level security;
