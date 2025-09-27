@@ -79,11 +79,35 @@
     await supabase.auth.signOut();
   }
 
+  // Subscribe to auth state changes
+  // handler receives { event, session, isLoggedIn }
+  function onAuthStateChange(handler) {
+    return window.IBAuthSupabase.getSupabase()
+      .then((supabase) => {
+        const { data } = supabase.auth.onAuthStateChange((event, session) => {
+          try {
+            handler({ event, session, isLoggedIn: !!session });
+          } catch (e) {
+            console.error('[IBAuth] onAuthStateChange handler error', e);
+          }
+        });
+        const sub = data && data.subscription;
+        return function unsubscribe() {
+          try { sub && sub.unsubscribe && sub.unsubscribe(); } catch (e) { /* noop */ }
+        };
+      })
+      .catch((e) => {
+        console.error('[IBAuth] Failed to initialize auth state subscription', e);
+        return function noop() {};
+      });
+  }
+
   window.IBAuthService = {
     signUp,
     signIn,
     signOut,
     getSession,
+    onAuthStateChange,
     ERROR_CODES,
   };
 })();

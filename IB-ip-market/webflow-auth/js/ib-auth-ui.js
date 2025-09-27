@@ -19,10 +19,18 @@
       successContainer: '[data-auth="signup-success"]',
       errorContainer: '[data-auth="signup-error"]',
     },
+    gnb: {
+      loginButton: '[data-auth="gnb-login"]',
+      signupLink: '[data-auth="gnb-signup"]',
+      logoutButton: '[data-auth="gnb-logout"]',
+    },
   };
 
   function $(selector) {
     return document.querySelector(selector);
+  }
+  function $$(selector) {
+    try { return Array.from(document.querySelectorAll(selector)); } catch (_) { return []; }
   }
 
   function setWait(el, waiting) {
@@ -43,10 +51,59 @@
 
   function show(el) { if (el) el.style.display = ''; }
   function hide(el) { if (el) el.style.display = 'none'; }
+  function showAll(els) { (els || []).forEach(show); }
+  function hideAll(els) { (els || []).forEach(hide); }
   function setText(el, text) { if (el) el.textContent = text; }
 
   function getInputValue(el) {
     return el && 'value' in el ? String(el.value || '').trim() : '';
+  }
+
+  function initGNB() {
+    try {
+      const loginBtns = $$(SELECTORS.gnb.loginButton);
+      const signupLnks = $$(SELECTORS.gnb.signupLink);
+      const logoutBtns = $$(SELECTORS.gnb.logoutButton);
+
+      function applyVisibility(isLoggedIn) {
+        try {
+          if (isLoggedIn) { hideAll(loginBtns); hideAll(signupLnks); showAll(logoutBtns); }
+          else { showAll(loginBtns); showAll(signupLnks); hideAll(logoutBtns); }
+        } catch (e) {
+          console.error('[IBAuthUI] Failed to apply GNB visibility', e);
+        }
+      }
+
+      // Initial state from current session
+      window.IBAuthService.getSession()
+        .then((session) => applyVisibility(!!session))
+        .catch((e) => {
+          console.error('[IBAuthUI] Failed to load session for GNB', e);
+          // Default to logged-out view on error
+          applyVisibility(false);
+        });
+
+      // Subscribe to auth state changes
+      window.IBAuthService.onAuthStateChange(({ isLoggedIn }) => {
+        applyVisibility(!!isLoggedIn);
+      });
+
+      // Logout click handler
+      (logoutBtns || []).forEach((btn) => {
+        btn.addEventListener('click', async function (e) {
+          try { e && e.preventDefault && e.preventDefault(); } catch (_) {}
+          try {
+            await window.IBAuthService.signOut();
+            applyVisibility(false);
+          } catch (err) {
+            console.error('[IBAuthUI] Logout failed', err);
+            alert((err && err.message) || '로그아웃에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+          }
+        });
+      });
+    } catch (e) {
+      console.error('[IBAuthUI] initGNB error', e);
+    }
   }
 
   function initLogin() {
@@ -126,14 +183,15 @@
 
   function bootstrap() {
     // Run after DOM is ready
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => {
-        initLogin();
-        initSignup();
-      });
-    } else {
+    function initAll() {
       initLogin();
       initSignup();
+      initGNB();
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initAll);
+    } else {
+      initAll();
     }
   }
 
