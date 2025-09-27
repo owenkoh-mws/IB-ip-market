@@ -53,6 +53,45 @@
   function hide(el) { if (el) el.style.display = 'none'; }
   function showAll(els) { (els || []).forEach(show); }
   function hideAll(els) { (els || []).forEach(hide); }
+
+  // Minimal accessible toast
+  function ensureToastRoot() {
+    let root = document.getElementById('ib-auth-toast-root');
+    if (root) return root;
+    root = document.createElement('div');
+    root.id = 'ib-auth-toast-root';
+    root.setAttribute('aria-live', 'polite');
+    root.setAttribute('aria-atomic', 'true');
+    root.style.position = 'fixed';
+    root.style.zIndex = '2147483647';
+    root.style.right = '16px';
+    root.style.bottom = '16px';
+    root.style.display = 'flex';
+    root.style.flexDirection = 'column';
+    root.style.gap = '8px';
+    document.body.appendChild(root);
+    return root;
+  }
+
+  function showToast(message) {
+    try {
+      const root = ensureToastRoot();
+      const toast = document.createElement('div');
+      toast.textContent = message;
+      toast.style.background = 'rgba(0,0,0,0.85)';
+      toast.style.color = '#fff';
+      toast.style.padding = '10px 14px';
+      toast.style.borderRadius = '8px';
+      toast.style.fontSize = '14px';
+      toast.style.maxWidth = '320px';
+      toast.style.boxShadow = '0 2px 8px rgba(0,0,0,0.35)';
+      root.appendChild(toast);
+      setTimeout(() => { try { root.removeChild(toast); } catch (_) {} }, 2600);
+    } catch (e) {
+      // Fallback alert
+      alert(message);
+    }
+  }
   function setText(el, text) { if (el) el.textContent = text; }
 
   function getInputValue(el) {
@@ -95,6 +134,10 @@
           try {
             await window.IBAuthService.signOut();
             applyVisibility(false);
+            // Avoid duplicate toast if a global logout toast script is active
+            if (!window.__IB_AUTH_LOGOUT_TOAST_ACTIVE && !window.__IB_AUTH_LOGOUT_TOAST_ACTIVE_V2) {
+              showToast('로그아웃되었습니다.');
+            }
           } catch (err) {
             console.error('[IBAuthUI] Logout failed', err);
             alert((err && err.message) || '로그아웃에 실패했습니다. 잠시 후 다시 시도해 주세요.');
