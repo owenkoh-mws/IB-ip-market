@@ -46,6 +46,23 @@
       throw wrapped;
     }
 
+    try {
+      // After sign up, if session exists (email may need confirmation), attempt to upsert profile
+      const session = data?.session || (await getSession());
+      const userId = session?.user?.id;
+      if (userId) {
+        await upsertProfile({
+          id: userId,
+          email: normalizedEmail,
+          name: name || null,
+          company: company || null,
+          phone: phone || null,
+        });
+      }
+    } catch (e) {
+      console.warn('[IBAuthService] profile upsert after signUp failed', e);
+    }
+
     return data;
   }
 
@@ -72,6 +89,32 @@
     const supabase = await window.IBAuthSupabase.getSupabase();
     const { data } = await supabase.auth.getSession();
     return data?.session || null;
+  }
+
+  // Profiles API
+  async function getProfile() {
+    const supabase = await window.IBAuthSupabase.getSupabase();
+    const session = await getSession();
+    if (!session?.user?.id) return null;
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', session.user.id)
+      .single();
+    if (error && error.code !== 'PGRST116') {
+      // PGRST116 = No rows found
+      throw error;
+    }
+    return data || null;
+  }
+
+  async function upsertProfile({ id, email, name, company, phone }) {
+    const supabase = await window.IBAuthSupabase.getSupabase();
+    const payload = { id, email, name, company, phone };
+    const { error } = await supabase
+      .from('profiles')
+      .upsert(payload, { onConflict: 'id' });
+    if (error) throw error;
   }
 
   async function signOut() {
@@ -108,6 +151,8 @@
     signOut,
     getSession,
     onAuthStateChange,
+    getProfile,
+    upsertProfile,
     ERROR_CODES,
   };
 })();
